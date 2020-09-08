@@ -238,13 +238,6 @@ if install:
     print_(f'\nChange cwd for testing:\n\t{path}')
     os.chdir(path)
     exitcode = int(os.system(f'{sys.executable} test_everything.py'))
-    if exitcode:
-        print_(f'Use this HydPy version with caution on your system.  At '
-               f'least one verification test failed.  You should see in the '
-               f'information given above, whether essential features of '
-               f'HydPy are broken or perhaps only some typing errors in '
-               f'documentation were detected.  (exit code: {exitcode:d})\n')
-        sys.exit(1)
 
     # Copy all extension files (pyx) and all compiled Cython files (pyd or so)
     # into the original `autogen` folder.
@@ -292,15 +285,3 @@ if install:
             path_in = prep(hydpy.conf.__path__[0], filename)
             path_out = prep(path_conf, filename)
             source2target(path_in, path_out)
-
-    print_('\nNo problems encountered during testing!\n')
-
-    # Check for complete code coverage
-    if os.environ.get('COVERAGE_PROCESS_START'):
-        print_('\nCheck for complete code coverage:')
-        os.system('coverage combine')
-        if os.system('coverage report -m --skip-covered --fail-under=100'):
-            print('\nTest coverage is incomplete!\n')
-            sys.exit(1)
-        print('\nTest coverage is complete!\n')
-        sys.exit(0)
