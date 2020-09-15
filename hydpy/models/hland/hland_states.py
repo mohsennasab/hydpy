@@ -163,3 +163,8 @@ class LZ(sequencetools.StateSequence):
             if not any(control.zonetype.values == ILAKE):
                 lower = 0.
         sequencetools.StateSequence.trim(self, lower, upper)
+
+
+class SC(sequencetools.StateSequence):
+    """Storage cascade for runoff concentration [mm]."""
+    NDIM, NUMERIC, SPAN = 1, False, (0., None)
