@@ -2339,6 +2339,7 @@ class Calc_OutUH_SC_V1(modeltools.Method):
     """
     CONTROLPARAMETERS = (
         hland_control.NmbStorages,
+        hland_control.RecStep,
     )
     DERIVEDPARAMETERS = (
         hland_derived.DT,
