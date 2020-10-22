@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """This module implements tools for increasing the level of automation and
-standardisation of the online documentation generated with Sphinx.
-"""
+standardisation of the online documentation generated with Sphinx."""
 # import...
 # ...from standard library
 import builtins
@@ -337,7 +336,13 @@ class Substituter:
             self.blacklist = set()
 
     @staticmethod
-    def consider_member(name_member, member, module, class_=None):
+    def consider_member(
+            name_member: str,
+            member: Any,
+            module,
+            class_=None,
+            ignore: Optional[Dict[str, any]] = None,
+    ):
         """Return |True| if the given member should be added to the
         substitutions. If not return |False|.
 
@@ -388,7 +393,7 @@ class Substituter:
         ...     'Node', hydpy.Node, hydpy)
         False
 
-        For descriptor instances (with method `__get__`) beeing members
+        For descriptor instances (with method `__get__`) being members
         of classes should be added:
 
         >>> from hydpy.auxs import anntools
@@ -396,12 +401,28 @@ class Substituter:
         ...     'shape_neurons', anntools.ANN.shape_neurons,
         ...     anntools, anntools.ANN)
         True
+
+        You can decide to ignore certain members:
+
+        >>> Substituter.consider_member(
+        ...     'shape_neurons', anntools.ANN.shape_neurons,
+        ...     anntools, anntools.ANN, {'test': 1.0})
+        True
+        >>> Substituter.consider_member(
+        ...     'shape_neurons', anntools.ANN.shape_neurons,
+        ...     anntools, anntools.ANN,
+        ...     {'shape_neurons': anntools.ANN.shape_neurons})
+        False
         """
+        if ignore and (name_member in ignore):
+            return False
         if name_member.startswith('_'):
             return False
         if inspect.ismodule(member):
             return False
         real_module = getattr(member, '__module__', None)
+        if (module is not typing) and (name_member in typing.__all__):
+            return False
         if not real_module:
             return True
         if real_module != module.__name__:
@@ -571,25 +592,42 @@ class Substituter:
         >>> import numpy
         >>> substituter.add_module(numpy)
 
-        Firstly, the module itself is added:
+        First, the module itself is added:
 
         >>> substituter.find('|numpy|')
         |numpy| :mod:`~numpy`
 
-        Secondly, constants like |numpy.nan| are added:
+        Second, constants like |numpy.nan| are added:
 
         >>> substituter.find('|numpy.nan|')
         |numpy.nan| :const:`~numpy.nan`
 
-        Thirdly, functions like |numpy.clip| are added:
+        Third, functions like |numpy.clip| are added:
 
         >>> substituter.find('|numpy.clip|')
         |numpy.clip| :func:`~numpy.clip`
 
-        Fourthly, clases line |numpy.ndarray| are added:
+        Fourth, clases line |numpy.ndarray| are added:
 
         >>> substituter.find('|numpy.ndarray|')
         |numpy.ndarray| :class:`~numpy.ndarray`
+
+        Method |Substituter.add_module| also searches for available
+        annotations:
+
+        >>> from hydpy.core import timetools
+        >>> substituter.add_module(timetools)
+        >>> substituter.find('Timegrids.init')
+        |Timegrids.init| :attr:`~hydpy.core.timetools.Timegrids.init`
+        |timetools.Timegrids.init| :attr:`~hydpy.core.timetools.Timegrids.init`
+
+        >>> from hydpy.auxs import calibtools
+        >>> substituter.add_module(calibtools)
+        >>> substituter.find('ReplaceIUH.update_parameters')
+        |ReplaceIUH.update_parameters| \
+:attr:`~hydpy.auxs.calibtools.ReplaceIUH.update_parameters`
+        |calibtools.ReplaceIUH.update_parameters| \
+:attr:`~hydpy.auxs.calibtools.ReplaceIUH.update_parameters`
 
         When adding Cython modules, the `cython` flag should be set |True|:
 
@@ -611,34 +649,42 @@ class Substituter:
             if self.consider_member(
                     name_member, member, module):
                 role = self.get_role(member, cython)
-                short = ('|%s|'
-                         % name_member)
-                medium = ('|%s.%s|'
-                          % (name_module,
-                             name_member))
-                long = (':%s:`~%s.%s`'
-                        % (role,
-                           module.__name__,
-                           name_member))
+                short = f'|{name_member}|'
+                medium = f'|{name_module}.{name_member}|'
+                long = f':{role}:`~{module.__name__}.{name_member}`'
                 self.add_substitution(short, medium, long, module)
                 if inspect.isclass(member):
+                    annotations = getattr(member, '__annotations__', {})
                     for name_submember, submember in vars(member).items():
                         if self.consider_member(
-                                name_submember, submember, module, member):
+                                name_member=name_submember,
+                                member=submember,
+                                module=module,
+                                class_=member,
+                                ignore=annotations,
+                        ):
                             role = self.get_role(submember, cython)
-                            short = ('|%s.%s|'
-                                     % (name_member,
-                                        name_submember))
-                            medium = ('|%s.%s.%s|'
-                                      % (name_module,
-                                         name_member,
-                                         name_submember))
-                            long = (':%s:`~%s.%s.%s`'
-                                    % (role,
-                                       module.__name__,
-                                       name_member,
-                                       name_submember))
+                            short = f'|{name_member}.{name_submember}|'
+                            medium = (
+                                f'|{name_module}.{name_member}.'
+                                f'{name_submember}|'
+                            )
+                            long = (
+                                f':{role}:`~{module.__name__}.'
+                                f'{name_member}.{name_submember}`'
+                            )
                             self.add_substitution(short, medium, long, module)
+                    for name_submember, submember in annotations.items():
+                        short = f'|{name_member}.{name_submember}|'
+                        medium = (
+                            f'|{name_module}.{name_member}.'
+                            f'{name_submember}|'
+                        )
+                        long = (
+                            f':attr:`~{module.__name__}.'
+                            f'{name_member}.{name_submember}`'
+                        )
+                        self.add_substitution(short, medium, long, module)
 
     def add_modules(self, package):
         """Add the modules of the given package without their members."""
@@ -702,7 +748,9 @@ class Substituter:
         >>> sub1.add_module(masktools)
         >>> sub1.find('Masks|')
         |Masks| :class:`~hydpy.core.masktools.Masks`
+        |NodeMasks| :class:`~hydpy.core.masktools.NodeMasks`
         |masktools.Masks| :class:`~hydpy.core.masktools.Masks`
+        |masktools.NodeMasks| :class:`~hydpy.core.masktools.NodeMasks`
         >>> sub2.find('Masks|')
 
         Through calling |Substituter.update_slaves|, the `medium2long`
@@ -711,8 +759,10 @@ class Substituter:
         >>> sub1.update_slaves()
         >>> sub2.find('Masks|')
         |masktools.Masks| :class:`~hydpy.core.masktools.Masks`
+        |masktools.NodeMasks| :class:`~hydpy.core.masktools.NodeMasks`
         >>> sub3.find('Masks|')
         |masktools.Masks| :class:`~hydpy.core.masktools.Masks`
+        |masktools.NodeMasks| :class:`~hydpy.core.masktools.NodeMasks`
         """
         if self.master is not None:
             self.master.medium2long.update(self.medium2long)
@@ -749,10 +799,11 @@ class Substituter:
         .. |Options.checkseries| replace:: \
 :const:`~hydpy.core.optiontools.Options.checkseries`
         ...
-        .. |optiontools.Options.warntrim| replace:: \
-:const:`~hydpy.core.optiontools.Options.warntrim`
-        .. |optiontools.Options| replace:: \
-:class:`~hydpy.core.optiontools.Options`
+        .. |optiontools.Options.autocompile| \
+replace:: :const:`~hydpy.core.optiontools.Options.autocompile`
+        .. |optiontools.Options.checkseries| replace:: \
+:const:`~hydpy.core.optiontools.Options.checkseries`
+        ...
 
         Through passing a string (usually the source code of a file
         to be documented), only the replacement commands relevant for

@@ -12,6 +12,7 @@ import numpy
 # ...from HydPy
 import hydpy
 from hydpy import config
+from hydpy.core import exceptiontools
 from hydpy.core import filetools
 from hydpy.core import objecttools
 from hydpy.core import timetools
@@ -101,14 +102,21 @@ class IntConstant(int):
 class Constants(dict):
     """Base class for defining integer constants for a specific model."""
 
+    value2name: Dict[int, str]
+    """Mapping from the the values of the constants to their names."""
+
     def __init__(self, *args, **kwargs):
         frame = inspect.currentframe().f_back
-        for (key, value) in frame.f_locals.items():
-            if key.isupper() and isinstance(value, IntConstant):
-                kwargs[key] = value
-        dict.__init__(self, *args, **kwargs)
-        self.__module__ = frame.f_locals['__name__']
-        self._prepare_docstrings(frame)
+        self.__module__ = frame.f_locals.get('__name__')
+        if not (args or kwargs):
+            for (key, value) in frame.f_locals.items():
+                if key.isupper() and isinstance(value, IntConstant):
+                    kwargs[key] = value
+            super().__init__(**kwargs)
+            self._prepare_docstrings(frame)
+        else:
+            super().__init__(*args, **kwargs)
+        self.value2name = {value: key for key, value in self.items()}
 
     def _prepare_docstrings(self, frame):
         """Assign docstrings to the constants handled by |Constants|
@@ -140,7 +148,7 @@ class Parameters:
     False
 
     Iterations makes only the non-empty subgroups available, which
-    are actually handling |Sequence| objects:
+    are actually handling |Sequence_| objects:
 
     >>> for subpars in model.parameters:
     ...     print(subpars.name)
@@ -193,9 +201,9 @@ class Parameters:
         >>> model.parameters.update()
         Traceback (most recent call last):
         ...
-        AttributeError: While trying to update parameter `nmbsegments` \
-of element `?`, the following error occurred: For variable `lag`, \
-no value has been defined so far.
+        hydpy.core.exceptiontools.AttributeNotReady: While trying to update \
+parameter `nmbsegments` of element `?`, the following error occurred: For \
+variable `lag`, no value has been defined so far.
 
         With proper values both for parameter |hstream_control.Lag| and
         |hstream_control.Damp|, updating the derived parameters succeeds:
@@ -385,7 +393,18 @@ set yet: c1(?).
         return objecttools.dir_(self)
 
 
-class SubParameters(variabletools.SubVariables[Parameters]):
+class FastAccessParameter(variabletools.FastAccess):
+    """Used as a surrogate for typed Cython classes handling parameters
+    when working in pure Python mode."""
+
+
+class SubParameters(
+    variabletools.SubVariables[
+        Parameters,
+        'Parameter',
+        FastAccessParameter,
+    ],
+):
     """Base class for handling subgroups of model parameters.
 
     When trying to implement a new model, one has to define its
@@ -441,28 +460,24 @@ class SubParameters(variabletools.SubVariables[Parameters]):
     """
 
     pars: Parameters
-    fastaccess: Union[
-        'FastAccessParameter', 'typingtools.FastAccessParameterProtocol']
-    _cls_fastaccess: Optional[Type[
-        'typingtools.FastAccessParameterProtocol']]
     _cymodel: Optional['typingtools.CyModelProtocol']
+    _CLS_FASTACCESS_PYTHON = FastAccessParameter
 
     def __init__(
             self,
             master: Parameters,
-            cls_fastaccess: Optional[Type[
-                'typingtools.FastAccessParameterProtocol']] = None,
+            cls_fastaccess: Optional[Type[FastAccessParameter]] = None,
             cymodel: Optional['typingtools.CyModelProtocol'] = None):
         self.pars = master
-        self._cls_fastaccess = cls_fastaccess
         self._cymodel = cymodel
-        super().__init__(master)
+        super().__init__(
+            master=master,
+            cls_fastaccess=cls_fastaccess,
+        )
 
     def __hydpy__initialise_fastaccess__(self) -> None:
-        if (self._cls_fastaccess is None) or (self._cymodel is None):
-            self.fastaccess = FastAccessParameter()
-        else:
-            self.fastaccess = self._cls_fastaccess()
+        super().__hydpy__initialise_fastaccess__()
+        if self._cls_fastaccess and self._cymodel:
             setattr(self._cymodel.parameters, self.name, self.fastaccess)
 
     @property
@@ -479,7 +494,12 @@ class SubParameters(variabletools.SubVariables[Parameters]):
         return type(self).__name__[:-10].lower()
 
 
-class Parameter(variabletools.Variable[SubParameters]):
+class Parameter(
+    variabletools.Variable[
+        SubParameters,
+        FastAccessParameter,
+    ]
+):
     """Base class for model parameters.
 
     In *HydPy*, each kind of model parameter is represented by a unique
@@ -567,6 +587,16 @@ The old and the new value(s) are `7.0` and `5.0`, respectively.
 from file `test`, the following error occurred: Cannot determine the \
 corresponding model.  Use the `auxfile` keyword in usual parameter \
 control files only.
+
+    Also note, that you cannot combine the `auxfile` keyword with any
+    other keyword:
+
+    >>> par(auxfile='test', x1=1, x2=2, x3=3)
+    Traceback (most recent call last):
+    ...
+    ValueError: It is not allowed to combine keyword `auxfile` with other \
+keywords, but for parameter `par` of element `?` also the following keywords \
+are used: x1, x2, and x3.
 
     Some |Parameter| subclasses support other keyword arguments.
     The standard error message for unsupported arguments is the following:
@@ -720,24 +750,32 @@ shape (2) into shape (2,3)
     """
     TIME: Optional[bool]
 
-    fastaccess: Union[
-        'FastAccessParameter',
-        'typingtools.FastAccessParameterProtocol']
+    _CLS_FASTACCESS_PYTHON = FastAccessParameter
 
     def __call__(self, *args, **kwargs):
         if args and kwargs:
             raise ValueError(
                 f'For parameter {objecttools.elementphrase(self)} '
                 f'both positional and keyword arguments are given, '
-                f'which is ambiguous.')
+                f'which is ambiguous.'
+            )
         if not args and not kwargs:
             raise ValueError(
                 f'For parameter {objecttools.elementphrase(self)} neither '
-                f'a positional nor a keyword argument is given.')
-        if 'auxfile' in kwargs:
-            values = self._get_values_from_auxiliaryfile(kwargs['auxfile'])
+                f'a positional nor a keyword argument is given.'
+            )
+        auxfile = kwargs.pop('auxfile', None)
+        if auxfile:
+            if kwargs:
+                raise ValueError(
+                    f'It is not allowed to combine keyword `auxfile` with '
+                    f'other keywords, but for parameter '
+                    f'{objecttools.elementphrase(self)} also the following '
+                    f'keywords are used: '
+                    f'{objecttools.enumeration(kwargs.keys())}.'
+                )
+            values = self._get_values_from_auxiliaryfile(auxfile)
             self.values = self.apply_timefactor(values)
-            del kwargs['auxfile']
         elif args:
             if len(args) == 1:
                 args = args[0]
@@ -745,7 +783,8 @@ shape (2) into shape (2,3)
         else:
             raise NotImplementedError(
                 f'The value(s) of parameter {objecttools.elementphrase(self)} '
-                f'could not be set based on the given keyword arguments.')
+                f'could not be set based on the given keyword arguments.'
+            )
         self.trim()
 
     def _get_values_from_auxiliaryfile(self, auxfile):
@@ -776,7 +815,7 @@ shape (2) into shape (2,3)
             subself = subnamespace[self.name]
             try:
                 return subself.__hydpy__get_value__()
-            except AttributeError:
+            except exceptiontools.AttributeNotReady:
                 raise RuntimeError(
                     f'The selected auxiliary file does not define '
                     f'value(s) for parameter `{self.name}`.'
@@ -793,7 +832,7 @@ shape (2) into shape (2,3)
         return self.subvars
 
     def __hydpy__connect_variable2subgroup__(self) -> None:
-        self.fastaccess = self.subvars.fastaccess
+        super().__hydpy__connect_variable2subgroup__()
         if self.NDIM:
             setattr(self.fastaccess, self.name, None)
         else:
@@ -931,8 +970,13 @@ parameter and a simulation time step size first.
                 ) from None
             date1 = timetools.Date('2000.01.01')
             date2 = date1 + options.simulationstep
-            parfactor = timetools.Timegrids(timetools.Timegrid(
-                date1, date2, options.simulationstep)).parfactor
+            parfactor = timetools.Timegrids(
+                timetools.Timegrid(
+                    firstdate=date1,
+                    lastdate=date2,
+                    stepsize=options.simulationstep,
+                ),
+            ).parfactor
         return parfactor(parameterstep)
 
     def trim(self, lower=None, upper=None) -> None:
@@ -1152,7 +1196,7 @@ implement method `update`.
         >>> test
         test([[]])
         """
-        if not hasattr(self, 'value'):
+        if not exceptiontools.attrready(self, 'value'):
             return '?'
         if not self:
             return f"{self.NDIM * '['}{self.NDIM * ']'}"
@@ -1173,7 +1217,7 @@ implement method `update`.
             islong = (len(self) > 255) if (values is None) else False
             return variabletools.to_repr(self, values, islong)
         lines = self.commentrepr
-        if hasattr(self, 'value'):
+        if exceptiontools.attrready(self, 'value'):
             value = self.revert_timefactor(self.value)
         else:
             value = '?'
@@ -1200,16 +1244,16 @@ class NameParameter(Parameter):
 
     For demonstration, we define the test class `LandType`, covering
     three different types of land covering.  For this purpose, we need
-    to prepare a dictionary (class attribute `CONSTANTS`), mapping the
-    land type names to identity values.  The entries of the `SPAN`
+    to prepare a dictionary of type |Constants| (class attribute `CONSTANTS`),
+    mapping the land type names to identity values.  The entries of the `SPAN`
     tuple should agree with the lowest and highest identity values.
     The class attributes `NDIM`, `TYPE`, and `TIME` are already set
     to `1`, `float`, and `None` by base class |NameParameter|:
 
-    >>> from hydpy.core.parametertools import NameParameter
+    >>> from hydpy.core.parametertools import Constants, NameParameter
     >>> class LandType(NameParameter):
     ...     SPAN = (1, 3)
-    ...     CONSTANTS = {'SOIL':  1, 'WATER': 2, 'GLACIER': 3}
+    ...     CONSTANTS = Constants(SOIL=1, WATER=2, GLACIER=3)
 
     Additionally, we make the constants available within the local
     namespace (which is usually done by importing the constants
@@ -1240,12 +1284,23 @@ class NameParameter(Parameter):
     >>> landtype
     landtype(SOIL, WATER, GLACIER, WATER, SOIL)
 
-    For high numbers of entries, the string representation puts the
+    For high numbers of entries, string representations are wrapped:
+
+    >>> landtype.shape = 22
+    >>> landtype(SOIL)
+    >>> landtype.values[0] = WATER
+    >>> landtype.values[-1] = GLACIER
+    >>> landtype
+    landtype(WATER, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL,
+             SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL, SOIL,
+             SOIL, GLACIER)
+
+    For very high numbers of entries, the string representation puts the
     names of the constants within a list (to make the string representations
     executable under Python 3.6; this behaviour will change as soon
     as Python 3.7 becomes the oldest supported version):
 
-    >>> landtype.shape = 300
+    >>> landtype.shape = 256
     >>> landtype(SOIL)
     >>> landtype.values[0] = WATER
     >>> landtype.values[-1] = GLACIER
@@ -1255,29 +1310,31 @@ class NameParameter(Parameter):
     NDIM = 1
     TYPE = int
     TIME = None
-    CONSTANTS: Dict[str, int]
+    CONSTANTS: Constants
 
-    def compress_repr(self) -> str:
-        """Works as |Parameter.compress_repr|, but returns a
-        string with constant names instead of constant values.
-
-        See the main documentation on class |NameParameter| for
-        further information.
-        """
+    def __repr__(self) -> str:
         string = super().compress_repr()
         if string in ('?', '[]'):
-            return string
+            return f'{self.name}({string})'
         if string is None:
             values = self.values
         else:
             values = [int(string)]
-        invmap = {value: key for key, value in
-                  self.CONSTANTS.items()}
-        result = ', '.join(
-            invmap.get(value, repr(value)) for value in values)
+        get = self.CONSTANTS.value2name.get
+        names = tuple(get(value, repr(value)) for value in values)
         if len(self) > 255:
-            result = f'[{result}]'
-        return result
+            string = objecttools.assignrepr_list(
+                values=names,
+                prefix=f'{self.name}(',
+                width=70,
+            )
+        else:
+            string = objecttools.assignrepr_values(
+                values=names,
+                prefix=f'{self.name}(',
+                width=70,
+            )
+        return f'{string})'
 
 
 class ZipParameter(Parameter):
@@ -1321,7 +1378,6 @@ class ZipParameter(Parameter):
     manner, see class |hland_parameters.ParameterComplete| for a "real
     world" example) but is supposed to focus on the response units of
     type `soil` or `glacier` only:
-
 
     >>> from hydpy.core.masktools import IndexMask
     >>> class Land(IndexMask):
@@ -1427,6 +1483,43 @@ The given keywords are incomplete and no default value is available.
     ...     par(soil=-10.0, glacier=10.0)
     >>> par
     par(glacier=10.0, soil=0.0)
+
+    For convenience, you can get or set all values related to a specific
+    constant via attribute access:
+
+    >>> par.soil
+    array([ 0.,  0.])
+    >>> par.soil = 2.5
+    >>> par
+    par(glacier=10.0, soil=5.0)
+
+    Improper use of these "special attributes" results in errors like
+    the following:
+
+    >>> par.Soil
+    Traceback (most recent call last):
+    ...
+    AttributeError: `Soil` is neither a normal attribute of parameter \
+`par` of element `?` nor among the following special attributes: \
+soil, water, and glacier.
+
+    >>> par.soil = 'test'
+    Traceback (most recent call last):
+    ...
+    ValueError: While trying the set the value(s) of parameter `par` \
+of element `?` related to the special attribute `soil`, the following \
+error occurred: could not convert string to float: 'test'
+
+    .. testsetup::
+
+        >>> dir(par)
+        ['INIT', 'MODEL_CONSTANTS', 'NDIM', 'NOT_DEEPCOPYABLE_MEMBERS', \
+'SPAN', 'TIME', 'TYPE', 'apply_timefactor', 'availablemasks', \
+'average_values', 'commentrepr', 'compress_repr', 'fastaccess', \
+'get_submask', 'get_timefactor', 'glacier', 'initinfo', 'landtype', \
+'mask', 'name', 'refweights', 'revert_timefactor', 'shape', 'soil', \
+'strict_valuehandling', 'subpars', 'subvars', 'trim', 'unit', 'update', \
+'value', 'values', 'verify', 'water']
     """
     NDIM = 1
     MODEL_CONSTANTS: Dict[str, int]
@@ -1441,9 +1534,13 @@ The given keywords are incomplete and no default value is available.
                 objecttools.augment_excmessage(
                     f'While trying to set the values of parameter '
                     f'{objecttools.elementphrase(self)} based on keyword '
-                    f'arguments `{objecttools.enumeration(kwargs)}`')
+                    f'arguments `{objecttools.enumeration(kwargs)}`'
+                )
 
-    def _own_call(self, kwargs: Dict[str, Any]) -> None:
+    def _own_call(
+            self,
+            kwargs: Dict[str, Any],
+    ) -> None:
         mask = self.mask
         self.values = numpy.nan
         values = self.values
@@ -1474,16 +1571,41 @@ The given keywords are incomplete and no default value is available.
         values[:] = self.apply_timefactor(values)
         self.trim()
 
-    def compress_repr(self) -> Optional[str]:
-        """Works as |Parameter.compress_repr|, but alternatively
-        tries to compress by following an external classification.
+    def __getattr__(self, name: str):
+        name_ = name.upper()
+        if (not name.islower()) or (name_ not in self.MODEL_CONSTANTS):
+            names = objecttools.enumeration(
+                key.lower() for key in self.MODEL_CONSTANTS.keys()
+            )
+            raise AttributeError(
+                f'`{name}` is neither a normal attribute of parameter '
+                f'{objecttools.elementphrase(self)} nor among the '
+                f'following special attributes: {names}.'
+            )
+        sel_constant = self.MODEL_CONSTANTS[name_]
+        used_constants = self.mask.refindices.values
+        return self.values[used_constants == sel_constant]
 
-        See the main documentation on class |ZipParameter| for
-        further information.
-        """
+    def __setattr__(self, name: str, value):
+        name_ = name.upper()
+        if name.islower() and (name_ in self.MODEL_CONSTANTS):
+            try:
+                sel_constant = self.MODEL_CONSTANTS[name_]
+                used_constants = self.mask.refindices.values
+                self.values[used_constants == sel_constant] = value
+            except BaseException:
+                objecttools.augment_excmessage(
+                    f'While trying the set the value(s) of parameter '
+                    f'{objecttools.elementphrase(self)} related to the '
+                    f'special attribute `{name}`'
+                )
+        else:
+            super().__setattr__(name, value)
+
+    def __repr__(self) -> str:
         string = super().compress_repr()
         if string is not None:
-            return string
+            return f'{self.name}({string})'
         results = []
         mask = self.mask
         refindices = mask.refindices.values
@@ -1496,8 +1618,19 @@ The given keywords are incomplete and no default value is available.
                     results.append(
                         f'{key.lower()}={objecttools.repr_(unique[0])}')
                 elif length > 1:
-                    return None
-        return ', '.join(sorted(results))
+                    return super().__repr__()
+        string = objecttools.assignrepr_values(
+            values=sorted(results),
+            prefix=f'{self.name}(',
+            width=70,
+        )
+        return f'{string})'
+
+    def __dir__(self):
+        return (
+            super().__dir__() +
+            [key.lower() for key in self.MODEL_CONSTANTS.keys()]
+        )
 
 
 class SeasonalParameter(Parameter):
@@ -2226,8 +2359,13 @@ index 1 is out of bounds for axis 0 with size 1
             blanks = ' '*len(prefix)
             string = ', '.join(f'{key}={objecttools.repr_(value)}'
                                for key, value in zip(self.ENTRYNAMES, values))
-            nmb = max(70-len(prefix), 30)
-            for idx, substring in enumerate(textwrap.wrap(string, nmb)):
+            for idx, substring in enumerate(
+                    textwrap.wrap(
+                        text=string,
+                        width=max(70-len(prefix), 30),
+                        break_long_words=False,
+                    )
+            ):
                 if idx:
                     lines.append(f'{blanks}{substring}')
                 else:
@@ -3137,8 +3275,3 @@ class UTCLongitudeParameter(Parameter):
         utclongitudeparameter(0)
         """
         self(hydpy.pub.options.utclongitude)
-
-
-class FastAccessParameter(variabletools.FastAccess):
-    """Used as a surrogate for typed Cython classes handling parameters
-    when working in pure Python mode."""

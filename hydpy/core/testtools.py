@@ -294,9 +294,17 @@ hydpy.models.hland.hland_control.ZoneType
                         opt.simulationstep(timetools.Period()), \
                         devicetools.clear_registries_temporarily():
                     # pylint: enable=not-callable
-                    projectname = hydpy.pub.get('projectname')
+                    projectname = exceptiontools.getattr_(
+                        hydpy.pub,
+                        'projectname',
+                        None,
+                    )
                     del hydpy.pub.projectname
-                    timegrids = hydpy.pub.get('timegrids')
+                    timegrids = exceptiontools.getattr_(
+                        hydpy.pub,
+                        'timegrids',
+                        None,
+                    )
                     del hydpy.pub.timegrids
                     plotting_options = IntegrationTest.plotting_options
                     IntegrationTest.plotting_options = PlottingOptions()
@@ -388,7 +396,7 @@ class Test:
             for dummy in range(len(parseq)-1):
                 strings.append('')
             if ((parseq.name == 'sim') and
-                    isinstance(parseq, sequencetools.Sequence)):
+                    isinstance(parseq, sequencetools.Sequence_)):
                 strings.append(parseq.subseqs.node.name)
             else:
                 strings.append(parseq.name)
@@ -1674,7 +1682,7 @@ def check_selectedvariables(
         method: 'modeltools.Method',
         indent: int = 0,
 ) -> str:
-    """Perform consistency checks regarding the |Parameter| and |Sequence|
+    """Perform consistency checks regarding the |Parameter| and |Sequence_|
     subclasses selected by the given |Method| subclass.
 
     The purpose of this function is to help model developers to ensure

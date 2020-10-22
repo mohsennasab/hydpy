@@ -69,7 +69,7 @@ def parameterstep(timestep: Optional[timetools.PeriodConstrArg] = None) -> None:
         for seqs in model.sequences:
             namespace[seqs.name] = seqs
         if 'Masks' in namespace:
-            model.masks = namespace['Masks'](model)
+            model.masks = namespace['Masks']()
             namespace['masks'] = model.masks
         for submodelclass in namespace['Model'].SUBMODELS:
             submodel = submodelclass(model)
@@ -247,7 +247,7 @@ def prepare_model(module: Union[types.ModuleType, str],
     model.parameters = prepare_parameters(dict_)
     model.sequences = prepare_sequences(dict_)
     if hasattr(module, 'Masks'):
-        model.masks = module.Masks(model)
+        model.masks = module.Masks()
     for submodelclass in module.Model.SUBMODELS:
         submodel = submodelclass(model)
         setattr(model, submodel.name, submodel)
@@ -460,10 +460,10 @@ The old and the new value(s) are `1.0, 1.0` and `0.1, 0.1`, respectively.
     One can define an alternative initialisation date via argument
     `firstdate`:
 
-    >>> text_old = ('controlcheck(projectdir="LahnH", '
-    ...             'controldir="default", stepsize="1d")')
-    >>> text_new = ('controlcheck(projectdir="LahnH", controldir="default", '
-    ...             'firstdate="2100-07-15", stepsize="1d")')
+    >>> text_old = ("controlcheck(projectdir=r'LahnH', "
+    ...             "controldir='default', stepsize='1d')")
+    >>> text_new = ("controlcheck(projectdir=r'LahnH', controldir='default', "
+    ...             "firstdate='2100-07-15', stepsize='1d')")
     >>> with TestIO():
     ...     os.chdir(cwd_new)
     ...     with open('land_dill.py') as file_:
@@ -481,7 +481,7 @@ The old and the new value(s) are `1.0, 1.0` and `0.1, 0.1`, respectively.
     ...     os.chdir(cwd_new)
     ...     with open('land_dill.py') as file_:
     ...         text = file_.read()
-    ...     text = text.replace('stepsize="1d"', '')
+    ...     text = text.replace("stepsize='1d'", '')
     ...     with open('land_dill.py', 'w') as file_:
     ...         _ = file_.write(text)
     ...     result = run_subprocess('hyd.py exec_script land_dill.py')
@@ -504,7 +504,7 @@ as function arguments.
     ...     os.chdir(cwd_new)
     ...     with open('land_dill.py') as file_:
     ...         text = file_.read()
-    ...     text = text.replace('firstdate="2100-07-15"', 'stepsize="1d"')
+    ...     text = text.replace("firstdate='2100-07-15'", "stepsize='1d'")
     ...     with open('land_dill.py', 'w') as file_:
     ...         _ = file_.write(text)
     ...     result = run_subprocess('hyd.py exec_script land_dill.py')
@@ -533,7 +533,10 @@ as function arguments.
                         os.path.split(os.getcwd())[0])[0])[-1])
         dirpath = os.path.abspath(os.path.join(
             '..', '..', '..', projectdir, 'control', controldir))
-        if hydpy.pub.get('timegrids') is None and stepsize is not None:
+        if not (
+                exceptiontools.attrready(hydpy.pub, 'timegrids') or
+                (stepsize is None)
+        ):
             if firstdate is None:
                 try:
                     firstdate = timetools.Date.from_string(

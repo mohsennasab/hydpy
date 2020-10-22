@@ -167,8 +167,8 @@ class FileManager:
             pass
         self._currentdir = None
 
-    @propertytools.ProtectedProperty
-    def projectdir(self) -> str:
+    @propertytools.ProtectedPropertyStr
+    def projectdir(self) -> str:    # pylint: disable=method-hidden
         """The name of the main folder of a project.
 
         For the `LahnH` example project, |FileManager.projectdir| is
@@ -882,8 +882,8 @@ class ControlManager(FileManager):
         >>> results['control']
         area(692.3)
         nmbzones(12)
-        zonetype(FIELD, FOREST, FIELD, FOREST, FIELD, FOREST, FIELD, \
-FOREST, FIELD, FOREST, FIELD, FOREST)
+        zonetype(FIELD, FOREST, FIELD, FOREST, FIELD, FOREST, FIELD, FOREST,
+                 FIELD, FOREST, FIELD, FOREST)
         zonearea(14.41, 7.06, 70.83, 84.36, 70.97, 198.0, 27.75, 130.0, 27.28,
                  56.94, 1.09, 3.61)
         zonez(2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0, 5.0, 6.0, 6.0, 7.0, 7.0)
@@ -1076,18 +1076,18 @@ class ConditionManager(FileManager):
     ...     repr_(pub.conditionmanager.inputpath)
     Traceback (most recent call last):
     ...
-    RuntimeError: While trying to determine the currently relevant \
-input path for loading conditions file, the following error occurred: \
-Attribute timegrids of module `pub` is not defined at the moment.
+    hydpy.core.exceptiontools.AttributeNotReady: While trying to determine the \
+currently relevant input path for loading conditions file, the following error \
+occurred: Attribute timegrids of module `pub` is not defined at the moment.
 
     >>> del pub.timegrids
     >>> with TestIO():    # doctest: +ELLIPSIS
     ...     repr_(pub.conditionmanager.outputpath)
     Traceback (most recent call last):
     ...
-    RuntimeError: While trying to determine the currently relevant \
-output path for saving conditions file, the following error occurred: \
-Attribute timegrids of module `pub` is not defined at the moment.
+    hydpy.core.exceptiontools.AttributeNotReady: While trying to determine the \
+currently relevant output path for saving conditions file, the following error \
+occurred: Attribute timegrids of module `pub` is not defined at the moment.
     """
 
     BASEDIR = 'conditions'

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """This module implements masking features to define which entries of
-|Parameter| or |Sequence| arrays are relevant and which are not."""
+|Parameter| or |Sequence_| arrays are relevant and which are not."""
 # import...
 # ...from standard library
 import inspect
@@ -8,6 +8,7 @@ from typing import *
 # ...from site-packages
 import numpy
 # ...from HydPy
+from hydpy.core import exceptiontools
 from hydpy.core import objecttools
 if TYPE_CHECKING:
     from hydpy.core import parametertools
@@ -205,7 +206,7 @@ determined as long as parameter `zonetype` is not prepared properly.
         Soil([ True,  True, False, False])
         """
         indices = cls.get_refindices(variable)
-        if numpy.min(getattr(indices, 'values', 0)) < 1:
+        if numpy.min(exceptiontools.getattr_(indices, 'values', 0)) < 1:
             raise RuntimeError(
                 f'The mask of parameter {objecttools.elementphrase(variable)} '
                 f'cannot be determined as long as parameter `{indices.name}` '
@@ -254,9 +255,6 @@ must be overridden, which is not the case for class `IndexMask`.
 class Masks:
     """Base class for handling groups of masks.
 
-    Attributes:
-      * model: The parent |Model| object.
-
     |Masks| subclasses are basically just containers, which are defined
     similar as |SubParameters| and |SubSequences| subclasses:
 
@@ -265,7 +263,7 @@ class Masks:
     >>> class Masks(Masks):
     ...     CLASSES = (IndexMask,
     ...                DefaultMask)
-    >>> masks = Masks(None)
+    >>> masks = Masks()
 
     The contained mask classes are available via attribute access in
     lower case letters:
@@ -318,8 +316,7 @@ following error occurred: The given key is neither a `string` a `mask` type.
     """
     CLASSES: Tuple[Type[BaseMask], ...]
 
-    def __init__(self, model):
-        self.model = model
+    def __init__(self):
         for cls in self.CLASSES:
             setattr(self, cls.__name__.lower(), cls)
 
@@ -329,7 +326,7 @@ following error occurred: The given key is neither a `string` a `mask` type.
 
         >>> from hydpy.core.masktools import Masks
         >>> Masks.CLASSES = ()
-        >>> Masks(None).name
+        >>> Masks().name
         'masks'
         >>> del Masks.CLASSES
         """
@@ -351,7 +348,8 @@ following error occurred: The given key is neither a `string` a `mask` type.
             pass
         raise TypeError(
             f'The given {objecttools.value_of_type(mask)} is '
-            f'neither a Mask class nor a Mask instance.')
+            f'neither a Mask class nor a Mask instance.'
+        )
 
     def __getitem__(self, key):
         _key = key
@@ -383,9 +381,23 @@ following error occurred: The given key is neither a `string` a `mask` type.
     def __repr__(self):
         lines = []
         for mask in self:
-            lines.append(f'{mask.__name__.lower()} of module '
-                         f'{mask.__module__}')
+            lines.append(
+                f'{mask.__name__.lower()} of module {mask.__module__}'
+            )
         return '\n'.join(lines)
 
     def __dir__(self):
         return objecttools.dir_(self)
+
+
+class NodeMasks(Masks):
+    """|Masks| subclass for class |Node|.
+
+    At the moment, the purpose of class |NodeMasks| is to make the
+    implementation of |ModelSequence| and |NodeSequence| more similar.
+    It will become relevant for applications as soon as we support
+    1-dimensional node sequences.
+    """
+    CLASSES = (
+        DefaultMask,
+    )

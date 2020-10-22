@@ -87,6 +87,7 @@ import numpy
 # ...from HydPy
 import hydpy
 from hydpy.core import exceptiontools
+from hydpy.core import masktools
 from hydpy.core import objecttools
 from hydpy.core import printtools
 from hydpy.core import sequencetools
@@ -112,7 +113,7 @@ ElementConstrArg = Union['Element', str]
 
 NodeVariableType = Union[
     str,
-    Type[sequencetools.InOutSequence],
+    sequencetools.TypesInOutSequence,
     'FusedVariable',
 ]
 
@@ -420,13 +421,13 @@ Keep in mind, that `name` is the unique identifier for fused variable instances.
     """
     _name: str
     _aliases: Tuple[str]
-    _variables: Tuple[Type[sequencetools.InOutSequence]]
-    _alias2variable: Dict[str, Type[sequencetools.InOutSequence]]
+    _variables: Tuple[sequencetools.TypesInOutSequence, ...]
+    _alias2variable: Dict[str, sequencetools.TypesInOutSequence]
 
     def __new__(
             cls,
             name: str,
-            *sequences: sequencetools.InOutSequence,
+            *sequences: sequencetools.TypesInOutSequence,
     ):
         self = super().__new__(cls)
         aliases = tuple(hydpy.sequence2alias[seq] for seq in sequences)
@@ -467,14 +468,14 @@ Keep in mind, that `name` is the unique identifier for fused variable instances.
         """
         return _registry_fusedvariable.clear()
 
-    def __iter__(self) -> Iterator[Type[sequencetools.InOutSequence]]:
+    def __iter__(self) -> Iterator[sequencetools.TypesInOutSequence]:
         for variable in self._variables:
             yield variable
 
     def __contains__(
             self,
             item: Union[
-                Type[sequencetools.InOutSequence],
+                sequencetools.TypesInOutSequence,
                 sequencetools.InOutSequence,
             ],
     ) -> bool:
@@ -1050,25 +1051,25 @@ which is in conflict with using their names as identifiers.
             return getattr(set(self), func)(set(other))
         return NotImplemented
 
-    def __lt__(self, other):
+    def __lt__(self, other: DevicesTypeBound) -> bool:
         return self.__compare(other, '__lt__')
 
-    def __le__(self, other):
+    def __le__(self, other: DevicesTypeBound) -> bool:
         return self.__compare(other, '__le__')
 
-    def __eq__(self, other: Any):
+    def __eq__(self, other: Any) -> bool:
         return self.__compare(other, '__eq__')
 
-    def __ne__(self, other: Any):
+    def __ne__(self, other: Any) -> bool:
         return self.__compare(other, '__ne__')
 
-    def __ge__(self, other: DeviceType):
+    def __ge__(self, other: DevicesTypeBound) -> bool:
         return self.__compare(other, '__ge__')
 
-    def __gt__(self, other: DeviceType):
+    def __gt__(self, other: DevicesTypeBound) -> bool:
         return self.__compare(other, '__gt__')
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.assignrepr('')
 
     def assignrepr(self, prefix: str = '') -> str:
@@ -1080,7 +1081,7 @@ which is in conflict with using their names as identifiers.
                     self.names, prefix, width=70)
                 return repr_ + ')'
 
-    def __dir__(self):
+    def __dir__(self) -> List[str]:
         """Just a regression test:
 
         >>> from hydpy import Node, Nodes
@@ -1668,6 +1669,8 @@ immutable Elements objects is not allowed.
     |Node| and |Element| objects properly.
     """
 
+    masks = masktools.NodeMasks()
+
     # noinspection PyUnusedLocal
     def __init__(
             self,
@@ -2109,7 +2112,10 @@ the given group name `test`.
             with objecttools.repr_.preserve_strings(True):
                 with objecttools.assignrepr_tuple.always_bracketed(False):
                     line = objecttools.assignrepr_list(
-                        sorted(self.keywords), subprefix, width=70)
+                        values=sorted(self.keywords),
+                        prefix=subprefix,
+                        width=70,
+                    )
             lines.append(line + ',')
         lines[-1] = lines[-1][:-1]+')'
         return '\n'.join(lines)
