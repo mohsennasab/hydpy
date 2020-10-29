@@ -1776,6 +1776,9 @@ a rule object named `fc`.
                 f"a rule object named `{key}`."
             ) from None
 
+    def __contains__(self, item: Union[str, Rule]) -> bool:
+        return (item in self._rules) or (item in self._rules.values())
+
     def __repr__(self) -> str:
         return "\n".join(repr(rule) for rule in self)
 
@@ -2031,3 +2034,71 @@ agree with the complete set of relevant elements (element1 and element2).
         """
         for parameter, orig in zip(self, self._original_parameter_values):
             parameter(orig)
+
+
+class CalibSpec:
+    """"""
+
+    name: str
+    lower: float
+    upper: float
+    init: float
+
+    def __init__(
+        self,
+        name: str,
+        lower: float,
+        upper: float,
+        init: float,
+    ) -> None:
+        if not (lower <= init <= upper):
+            raise ValueError(
+                f"Bedingung `lower <= init <= upper` für Parameter `{name}` "
+                f"nicht erfüllt."
+            )
+        self.name = name
+        self.lower = lower
+        self.upper = upper
+        self.init = init
+
+
+class CalibSpecs:
+    _name2parspec: Dict[str, CalibSpec]
+
+    def __init__(
+        self,
+        *parspecs: CalibSpec,
+    ) -> None:
+        self._name2parspec = {parspec.name: parspec for parspec in parspecs}
+
+    def __getitem__(self, item: str) -> CalibSpec:
+        return self._name2parspec[item]
+
+    def __setitem__(self, key: str, value: CalibSpec) -> None:
+        self._name2parspec[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self._name2parspec[key]
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._name2parspec
+
+    def add(self, *calibspecs: CalibSpec) -> None:
+        for calibspec in calibspecs:
+            self[calibspec.name] = calibspec
+
+    @property
+    def names(self) -> Tuple[str]:
+        return tuple(parspec.name for parspec in self._name2parspec.values())
+
+    @property
+    def lowers(self) -> Tuple[float]:
+        return tuple(parspec.lower for parspec in self._name2parspec.values())
+
+    @property
+    def uppers(self) -> Tuple[float]:
+        return tuple(parspec.upper for parspec in self._name2parspec.values())
+
+    @property
+    def inits(self) -> Tuple[float]:
+        return tuple(parspec.init for parspec in self._name2parspec.values())
