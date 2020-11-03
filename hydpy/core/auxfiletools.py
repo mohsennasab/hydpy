@@ -455,7 +455,12 @@ variable handled by the actual Variable2AuxFile object.
     _master: Optional[Auxfiler]
     _model: Optional[modeltools.Model]
     _type2filename2variable: Dict[
-        Type[parametertools.Parameter], Dict[str, parametertools.Parameter]
+        Type[parametertools.Parameter],
+        Dict[str, parametertools.Parameter],
+    ]
+    _variable2keywordarguments: Dict[
+        parametertools.Parameter,
+        parametertools.KeywordArguments,
     ]
 
     def __init__(
@@ -536,6 +541,18 @@ variable handled by the actual Variable2AuxFile object.
                     f"`{type(new_var).__name__}` object has "
                     f"already been allocated to filename `{reg_fn}`."
                 )
+
+    def add(
+        self,
+        filename: str,
+        variable: parametertools.Parameter,
+        keywordarguments: Optional[parametertools.KeywordArguments],
+    ):
+        """ToDo"""
+        setattr(self, filename, variable)
+        if keywordarguments is not None:
+            parameter_copy = self._type2filename2variable[type(variable)][filename]
+            self._variable2keywordarguments[parameter_copy] = keywordarguments
 
     def remove(
         self,
@@ -688,7 +705,10 @@ variable handled by the actual Variable2AuxFile object.
         """
         fn2var = self._type2filename2variable.get(type(variable), {})
         for (fn_, var) in fn2var.items():
-            if var == variable:
+            if var in self._variable2keywordarguments:
+                if variable == self._variable2keywordarguments[var]:
+                    return fn_
+            elif var == variable:
                 return fn_
         return None
 

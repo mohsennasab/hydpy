@@ -22,6 +22,7 @@ from hydpy.core import variabletools
 
 if TYPE_CHECKING:
     from hydpy.core import auxfiletools
+    from hydpy.core import devicetools
     from hydpy.core import masktools
     from hydpy.core import modeltools
     from hydpy.core import typingtools
@@ -501,6 +502,30 @@ class SubParameters(
         'control'
         """
         return type(self).__name__[:-10].lower()
+
+
+class KeywordArguments(dict):
+    """ToDo"""
+
+    def collect(
+        self,
+        parameter: Union[str, "Parameter"],
+        elements: Iterable["devicetools.Element"],
+    ) -> None:
+        name = getattr(parameter, "name", parameter)
+        for element in elements:
+            control = element.model.parameters.control
+            try:
+                keywordarguments = control[name].keywordarguments
+            except KeyError:
+                raise RuntimeError("ToDo")
+            if keywordarguments is None:
+                raise RuntimeError("ToDo")
+            for name, value in keywordarguments:
+                if name not in self:
+                    self[name] = value
+                elif self[name] != value:
+                    raise RuntimeError("ToDo")
 
 
 class Parameter(
@@ -1095,6 +1120,11 @@ implement method `update`.
             f"implement method `update`."
         )
 
+    @property
+    def keywordarguments(self) -> Optional[KeywordArguments]:
+        """ToDo"""
+        return None
+
     def compress_repr(self) -> Optional[str]:
         """Try to find a compressed parameter value representation and
         return it.
@@ -1539,13 +1569,12 @@ error occurred: could not convert string to float: 'test'
     .. testsetup::
 
         >>> dir(par)
-        ['INIT', 'MODEL_CONSTANTS', 'NDIM', 'NOT_DEEPCOPYABLE_MEMBERS', \
-'SPAN', 'TIME', 'TYPE', 'apply_timefactor', 'availablemasks', \
-'average_values', 'commentrepr', 'compress_repr', 'fastaccess', \
-'get_submask', 'get_timefactor', 'glacier', 'initinfo', 'landtype', \
-'mask', 'name', 'refweights', 'revert_timefactor', 'shape', 'soil', \
-'strict_valuehandling', 'subpars', 'subvars', 'trim', 'unit', 'update', \
-'value', 'values', 'verify', 'water']
+        ['INIT', 'MODEL_CONSTANTS', 'NDIM', 'NOT_DEEPCOPYABLE_MEMBERS', 'SPAN', \
+'TIME', 'TYPE', 'apply_timefactor', 'availablemasks', 'average_values', 'commentrepr', \
+'compress_repr', 'fastaccess', 'get_submask', 'get_timefactor', 'glacier', 'initinfo', \
+'keywordarguments', 'landtype', 'mask', 'name', 'refweights', 'revert_timefactor', \
+'shape', 'soil', 'strict_valuehandling', 'subpars', 'subvars', 'trim', 'unit', \
+'update', 'value', 'values', 'verify', 'water']
     """
 
     NDIM = 1
@@ -1628,22 +1657,54 @@ error occurred: could not convert string to float: 'test'
         else:
             super().__setattr__(name, value)
 
-    def __repr__(self) -> str:
-        string = self.compress_repr()
-        if string is not None:
-            return f"{self.name}({string})"
-        results = []
+    @property
+    def keywordarguments(self) -> Optional[KeywordArguments]:
         mask = self.mask
         refindices = mask.refindices.values
+        name2unique = KeywordArguments()
         for (key, value) in self.MODEL_CONSTANTS.items():
             if value in mask.RELEVANT_VALUES:
                 unique = numpy.unique(self.values[refindices == value])
                 unique = self.revert_timefactor(unique)
                 length = len(unique)
                 if length == 1:
-                    results.append(f"{key.lower()}={objecttools.repr_(unique[0])}")
+                    name2unique[key.lower()] = unique[0]
                 elif length > 1:
-                    return super().__repr__()
+                    return None
+        return name2unique
+
+    def _own_eq(self, other: KeywordArguments) -> bool:
+        keywordarguments = self.keywordarguments
+        if keywordarguments is None:
+            return True
+        for name, value in keywordarguments.items():
+            if name not in other:
+                return False
+            if value != other[name]:
+                return False
+        return True
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, KeywordArguments):
+            return self._own_eq(other)
+        return super().__eq__(other)
+
+    def __ne__(self, other) -> bool:
+        if isinstance(other, KeywordArguments):
+            return not self._own_eq(other)
+        return super().__ne__(other)
+
+    def __repr__(self) -> str:
+        string = self.compress_repr()
+        if string is not None:
+            return f"{self.name}({string})"
+        keywordarguments = self.keywordarguments
+        if keywordarguments is None:
+            return super().__repr__()
+        results = [
+            f"{name}={objecttools.repr_(value)}"
+            for name, value in keywordarguments.items()
+        ]
         string = objecttools.assignrepr_values(
             values=sorted(results),
             prefix=f"{self.name}(",

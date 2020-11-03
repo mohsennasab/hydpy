@@ -49,6 +49,7 @@ from hydpy.core.objecttools import classname
 from hydpy.core.objecttools import print_values
 from hydpy.core.objecttools import round_
 from hydpy.core.objecttools import repr_
+from hydpy.core.parametertools import KeywordArguments
 from hydpy.core.selectiontools import Selection
 from hydpy.core.selectiontools import Selections
 from hydpy.core.timetools import Date
@@ -165,6 +166,7 @@ __all__ = [
     "classname",
     "repr_",
     "round_",
+    "KeywordArguments",
     "Selection",
     "Selections",
     "Date",
