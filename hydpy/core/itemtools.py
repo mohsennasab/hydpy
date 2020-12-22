@@ -3,7 +3,6 @@
 modification of the values of |Parameter| and |Sequence_| objects."""
 # import...
 # ...from standard library
-import abc
 from typing import *
 
 # ...from site-packages
@@ -284,10 +283,17 @@ into shape ()
                 f"numpy array of shape `{self.shape}` and type `float`"
             )
 
-    @abc.abstractmethod
     def update_variables(self) -> None:
         """Subclasses must define a mathematical operation for updating
-        the values of target variables."""
+        the values of target variables.
+
+        >>> from hydpy.core.itemtools import ChangeItem
+        >>> ChangeItem().update_variables()
+        Traceback (most recent call last):
+        ...
+        NotImplementedError
+        """
+        raise NotImplementedError
 
     def collect_variables(self, selections) -> None:
         """Apply method |ExchangeItem.collect_variables| of the base class
@@ -397,7 +403,7 @@ class SetItem(ChangeItem):
     """Item for assigning |ChangeItem.value| to multiple |Parameter| or
     |Sequence_| objects of a specific type."""
 
-    def __init__(self, name, master, target, ndim):
+    def __init__(self, name, master, target, ndim) -> None:
         self.name = str(name)
         self.targetspecs = ExchangeSpecification(master, target)
         self.ndim = int(ndim)
@@ -507,7 +513,7 @@ class MathItem(ChangeItem):
     basespecs: ExchangeSpecification
     device2base: Dict
 
-    def __init__(self, name, master, target, base, ndim):
+    def __init__(self, name, master, target, base, ndim) -> None:
         self.name = str(name)
         self.targetspecs = ExchangeSpecification(master, target)
         self.basespecs = ExchangeSpecification(master, base)
