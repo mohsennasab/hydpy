@@ -474,6 +474,16 @@ class CyModelProtocol(Protocol):
     sequences: CySequencesProtocol
 
 
+class ScriptFunction(Protocol):
+    """Callback protocol for functions to be executed from the command line
+    (see the documentation on function |execute_scriptfunction| and module
+    |hyd| for further information).
+    """
+
+    def __call__(self, *args: str, **kwargs: str) -> Optional[int]:
+        ...
+
+
 __all__ = [
     "ArrayFloat",
     "CyModelProtocol",
@@ -489,6 +499,7 @@ __all__ = [
     "Collection1",
     "Collection2",
     "Collection3",
+    "ScriptFunction",
     "Sequence1",
     "Sequence2",
     "Sequence3",
