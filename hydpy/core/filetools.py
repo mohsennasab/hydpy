@@ -171,8 +171,7 @@ class FileManager:
             pass
         self._currentdir = None
 
-    @propertytools.ProtectedPropertyStr
-    def projectdir(self) -> str:  # pylint: disable=method-hidden
+    def _get_projectdir(self) -> str:
         """The name of the main folder of a project.
 
         For the `LahnH` example project, |FileManager.projectdir| is
@@ -207,13 +206,17 @@ of object `filemanager` has not been prepared so far.
         """
         return self._projectdir
 
-    @projectdir.setter
-    def projectdir(self, name: str) -> None:
+    def _set_projectdir(self, name: str) -> None:
         self._projectdir = name
 
-    @projectdir.deleter
-    def projectdir(self) -> None:
+    def _del_projectdir(self) -> None:
         self._projectdir = None
+
+    projectdir = propertytools.ProtectedPropertyStr(
+        fget=_get_projectdir,
+        fset=_set_projectdir,
+        fdel=_del_projectdir,
+    )
 
     @property
     def basepath(self) -> str:
