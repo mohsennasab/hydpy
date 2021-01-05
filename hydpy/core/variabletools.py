@@ -1014,8 +1014,8 @@ var != [nan, nan, nan], var >= [nan, nan, nan], var > [nan, nan, nan]
 
     __hydpy__subclasscounter__ = 1
 
-    name: str
-    unit: str
+    name: ClassVar[str]
+    unit: ClassVar[str]
     fastaccess: FastAccessType
     subvars: SubVariablesType
 
@@ -1211,7 +1211,8 @@ occurred: could not broadcast input array from shape (2) into shape (2,3)
                     f"and type `{self.TYPE.__name__}`"
                 )
         else:
-            if isinstance(value, Sequence):
+            if isinstance(value, Collection):  # pylint: disable=isinstance-second-argument-not-valid-type
+                # see: https://github.com/PyCQA/pylint/issues/3507
                 if len(value) > 1:
                     raise ValueError(
                         f"{len(value)} values are assigned to the scalar "
