@@ -1014,8 +1014,8 @@ var != [nan, nan, nan], var >= [nan, nan, nan], var > [nan, nan, nan]
 
     __hydpy__subclasscounter__ = 1
 
-    name: ClassVar[str]
-    unit: ClassVar[str]
+    name: ClassVar[str] = "variable"
+    unit: ClassVar[str] = "?"
     fastaccess: FastAccessType
     subvars: SubVariablesType
 
