@@ -119,6 +119,9 @@ class Vector(VectorInput[Float1]):
     ) -> None:
         ...
 
+    def __contains__(self, item: Float1) -> bool:
+        ...
+
     def __invert__(self) -> "Vector[Float1]":
         ...
 
@@ -301,6 +304,9 @@ class Matrix(MatrixInput[Float1]):
         ...
 
     def __iter__(self) -> Iterator[Vector[Float1]]:
+        ...
+
+    def __contains__(self, item: Float1) -> bool:
         ...
 
     def __invert__(self) -> "Matrix[Float1]":
