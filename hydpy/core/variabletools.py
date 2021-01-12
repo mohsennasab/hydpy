@@ -13,6 +13,7 @@ import inspect
 import textwrap
 import warnings
 from typing import *
+from typing import NoReturn
 from typing_extensions import Literal  # type: ignore[misc]
 
 # ...from site-packages
@@ -23,10 +24,12 @@ import hydpy
 from hydpy.core import exceptiontools
 from hydpy.core import masktools
 from hydpy.core import objecttools
+from hydpy.core import propertytools
 from hydpy.core.typingtools import *
 
 if TYPE_CHECKING:
     from hydpy.core import devicetools
+    from hydpy.core import masktools
     from hydpy.core import parametertools
     from hydpy.core import sequencetools
     from hydpy.cythons.autogen import pointerutils
@@ -41,11 +44,11 @@ GroupType = TypeVar(
 )
 SubVariablesType = TypeVar(
     "SubVariablesType",
-    bound="SubVariables",
+    bound="SubVariables[Any, Any, Any]",
 )
 VariableType = TypeVar(
     "VariableType",
-    bound="Variable",
+    bound="Variable[Any, Any, Any]",
 )
 FastAccessType = TypeVar(
     "FastAccessType",
@@ -59,7 +62,7 @@ but not for integer values."""
 TYPE2MISSINGVALUE = {float: numpy.nan, int: INT_NAN, bool: False}
 
 
-def trim(self: "Variable", lower=None, upper=None) -> None:
+def trim(self: "Variable[Any, Any, Any]", lower=None, upper=None) -> None:
     """Trim the value(s) of a |Variable| instance.
 
     Usually, users do not need to apply function |trim| directly.
@@ -402,12 +405,12 @@ def _trim_float_0d(self, lower, upper):
         upper = numpy.inf
     if self < lower:
         old = self.value
-        self.value = lower
+        self.__hydpy__set_value__(lower)
         if (old + get_tolerance(old)) < (lower - get_tolerance(lower)):
             _warn_trim(self, oldvalue=old, newvalue=lower)
     elif self > upper:
         old = self.value
-        self.value = upper
+        self.__hydpy__set_value__(upper)
         if (old - get_tolerance(old)) > (upper + get_tolerance(upper)):
             _warn_trim(self, oldvalue=old, newvalue=upper)
 
@@ -428,7 +431,7 @@ def _trim_float_nd(self, lower, upper):
     if numpy.any(values < lower) or numpy.any(values > upper):
         old = values.copy()
         trimmed = numpy.clip(values, lower, upper)
-        self.values = trimmed
+        self.__hydpy__set_value__(trimmed)
         if numpy.any(
             (old + get_tolerance(old)) < (lower - get_tolerance(lower))
         ) or numpy.any((old - get_tolerance(old)) > (upper + get_tolerance(upper))):
@@ -518,7 +521,404 @@ class FastAccess:
                 yield key
 
 
-class Variable(Generic[SubVariablesType, FastAccessType]):
+if TYPE_CHECKING:
+
+    @runtime_checkable
+    class Dim0(Protocol):
+        NDIM: Literal[0] = 0
+
+    @runtime_checkable
+    class Dim1(Protocol):
+        NDIM: Literal[1] = 1
+
+    @runtime_checkable
+    class Dim2(Protocol):
+        NDIM: Literal[2] = 2
+
+
+else:
+
+    class Dim(abc.ABC):
+        @classmethod
+        def __subclasshook__(cls, subclass: "Variable") -> bool:
+            return cls.NDIM == subclass.NDIM
+
+    class Dim0(Dim):
+        NDIM: Literal[0] = 0
+
+    class Dim1(Dim):
+        NDIM: Literal[1] = 1
+
+    class Dim2(Dim):
+        NDIM: Literal[2] = 2
+
+
+class _FGetValue(Protocol[ValueType]):
+    @overload
+    def __call__(
+        self,
+        __obj: Dim0,
+    ) -> ValueType:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim1,
+    ) -> Vector[ValueType]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim2,
+    ) -> Matrix[ValueType]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: "Variable[Any, Any, Any]",
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType]]:
+        ...
+
+
+class _FSetValue(Protocol[ValueType_contra]):
+    @overload
+    def __call__(
+        self,
+        __obj: Dim0,
+        __value: ValueType_contra,
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim1,
+        __value: VectorInput[ValueType_contra],
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim2,
+        __value: MatrixInput[ValueType_contra],
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: "Variable[Any, Any, Any]",
+        __value: Union[
+            ValueType_contra,
+            VectorInput[ValueType_contra],
+            MatrixInput[ValueType_contra],
+        ],
+    ) -> None:
+        ...
+
+
+class _ValueProperty(Generic[ValueType], propertytools.BaseDescriptor):
+
+    objtype: Type["Variable[Any, Any, Any]"]
+    fget: _FGetValue[ValueType]
+    fset: _FSetValue[ValueType]
+
+    def __init__(
+        self,
+        fget: _FGetValue[ValueType],
+        fset: _FSetValue[ValueType],
+        doc: Optional[str] = None,
+    ) -> None:
+        self.fget = fget
+        self.fset = fset
+        if doc is None:
+            doc = fget.__doc__
+        self.set_doc(doc)
+
+    @overload
+    def __get__(
+        self,
+        obj: None,
+        objtype: Type[Any],
+    ) -> "_ValueProperty[ValueType]":
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim0,
+        objtype: Type[Any],
+    ) -> ValueType:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim1,
+        objtype: Type[Any],
+    ) -> Vector[ValueType]:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim2,
+        objtype: Type[Any],
+    ) -> Matrix[ValueType]:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: "Variable[Any, Any, Any]",
+        objtype: Type[Any],
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType]]:
+        ...
+
+    def __get__(
+        self,
+        obj: Union[None, Dim0, Dim1, Dim2, "Variable[Any, Any, Any]"],
+        objtype: Type[Any],
+    ) -> Union[
+        ValueType,
+        Vector[ValueType],
+        Matrix[ValueType],
+        "_ValueProperty[ValueType]",
+    ]:
+        if obj is None:
+            return self
+        return self.fget(obj)
+
+    # the following overloads crash mypy (https://github.com/python/mypy/issues/7205)
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim0,
+    #     objtype: Type[Any],
+    #     value: ValueType,
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim1,
+    #     objtype: Type[Any],
+    #     value: VectorInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim2,
+    #     objtype: Type[Any],
+    #     value: MatrixInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: "Variable[Any, Any, Any]",
+    #     objtype: Type[Any],
+    #     value: MatrixInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    def __set__(
+        self,
+        obj: Union[Dim0, Dim1, Dim2],
+        objtype: Type[Any],
+        value: Union[ValueType, VectorInput[ValueType], MatrixInput[ValueType]],
+    ) -> None:
+        self.fset(obj, value)
+
+
+class _FGetShape(Protocol):
+    @overload
+    def __call__(
+        self,
+        __obj: Dim0,
+    ) -> Tuple[()]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim1,
+    ) -> Tuple[int]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim2,
+    ) -> Tuple[int, int]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: "Variable[Any, Any, Any]",
+    ) -> Union[Tuple[()], Tuple[int], Tuple[int, int]]:
+        ...
+
+
+class _FSetShape(Protocol):
+    @overload
+    def __call__(
+        self,
+        __obj: Dim0,
+        __shape: Tuple[()],
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim1,
+        __shape: Union[int, Tuple[int]],
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: Dim2,
+        __shape: Tuple[int, int],
+    ) -> None:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        __obj: "Variable[Any, Any, Any]",
+        __shape: Union[Tuple[()], int, Tuple[int], Tuple[int, int]],
+    ) -> None:
+        ...
+
+
+class _ShapeProperty(propertytools.BaseDescriptor):
+
+    objtype: Type["Variable[Any, Any, Any]"]
+    fget: _FGetShape
+    fset: _FSetShape
+
+    def __init__(
+        self,
+        fget: _FGetShape,
+        fset: _FSetShape,
+        doc: Optional[str] = None,
+    ) -> None:
+        self.fget = fget
+        self.fset = fset
+        if doc is None:
+            doc = fget.__doc__
+        self.set_doc(doc)
+
+    @overload
+    def __get__(
+        self,
+        obj: None,
+        objtype: Type[Any],
+    ) -> "_ShapeProperty":
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim0,
+        objtype: Type[Any],
+    ) -> Tuple[()]:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim1,
+        objtype: Type[Any],
+    ) -> Tuple[int]:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: Dim2,
+        objtype: Type[Any],
+    ) -> Tuple[int, int]:
+        ...
+
+    @overload
+    def __get__(
+        self,
+        obj: "Variable[Any, Any, Any]",
+        objtype: Type[Any],
+    ) -> Union[Tuple[()], Tuple[int], Tuple[int, int]]:
+        ...
+
+    def __get__(
+        self,
+        obj: Union[None, Dim0, Dim1, Dim2, "Variable[Any, Any, Any]"],
+        objtype: Type[Any],
+    ) -> Union[Tuple[()], Tuple[int], Tuple[int, int], _ShapeProperty]:
+        if obj is None:
+            return self
+        return self.fget(obj)
+
+    # the following overloads crash mypy (https://github.com/python/mypy/issues/7205)
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim0,
+    #     objtype: Type[Any],
+    #     value: ValueType,
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim1,
+    #     objtype: Type[Any],
+    #     value: VectorInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: Dim2,
+    #     objtype: Type[Any],
+    #     value: MatrixInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    # @overload
+    # def __set__(
+    #     self,
+    #     obj: "Variable[Any, Any, Any]",
+    #     objtype: Type[Any],
+    #     value: MatrixInput[ValueType],
+    # ) -> None:
+    #     ...
+    #
+    def __set__(
+        self,
+        obj: Union[Dim0, Dim1, Dim2],
+        objtype: Type[Any],
+        value: Union[Tuple[()], int, Tuple[int], Tuple[int, int]],
+    ) -> None:
+        self.fset(obj, value)
+
+
+class Variable(Generic[SubVariablesType, FastAccessType, ValueType]):
     """Base class for |Parameter| and |Sequence_|.
 
     The subclasses are required to provide the class attributes `NDIM`
@@ -997,15 +1397,15 @@ var != [nan, nan, nan], var >= [nan, nan, nan], var > [nan, nan, nan]
     '?'
     """
 
-    # Subclasses need to define...
-    NDIM: int
-    TYPE: Type
-    # ...and optionally...
-    SPAN: Tuple[Union[int, float, bool, None], Union[int, float, bool, None]] = (
-        None,
-        None,
-    )
-    INIT: Union[int, float, bool, None] = None
+    NDIM: Any  # Literal[0, 1, 2] ???, see issue...
+
+    @property
+    @abc.abstractmethod
+    def TYPE(self) -> Type[ValueType]:
+        ...
+
+    SPAN: Tuple[Optional[ValueType], Optional[ValueType]] = (None, None)
+    INIT: Optional[ValueType] = None
 
     NOT_DEEPCOPYABLE_MEMBERS: Tuple[str, ...] = ("subvars", "fastaccess")
     _CLS_FASTACCESS_PYTHON: ClassVar[Type[FastAccessType]]
@@ -1021,13 +1421,13 @@ var != [nan, nan, nan], var >= [nan, nan, nan], var > [nan, nan, nan]
 
     mask = masktools.DefaultMask()
 
-    def __init__(self, subvars: SubVariablesType):
+    def __init__(self, subvars: SubVariablesType) -> None:
         self.subvars = subvars
         self.fastaccess = self._CLS_FASTACCESS_PYTHON()
         self.__valueready = False
         self.__shapeready = False
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
         super().__init_subclass__()
         cls.name = cls.__name__.lower()
         cls.unit = cls._get_unit()
@@ -1056,12 +1456,52 @@ var != [nan, nan, nan], var >= [nan, nan, nan], var > [nan, nan, nan]
     ) -> Tuple[Union[float, int, bool, "pointerutils.Double",], bool,]:
         """To be overridden."""
 
-    def __call__(self, *args) -> None:
-        if len(args) == 1:
-            args = args[0]
-        self.values = args
+    @overload
+    def __call__(self: Dim0, __args: ValueType) -> None:
+        ...
 
-    def __hydpy__get_value__(self):
+    @overload
+    def __call__(self: Dim1, *__args: ValueType) -> None:
+        ...
+
+    @overload
+    def __call__(self: Dim1, __args: VectorInput[ValueType]) -> None:
+        ...
+
+    @overload
+    def __call__(self: Dim2, __args: MatrixInput[ValueType]) -> None:
+        ...
+
+    def __call__(
+        self,
+        *__args: Any,  # I don't know how to express this
+    ) -> None:
+        if len(__args) == 1:
+            self.__hydpy__set_value__(__args[0])
+        else:
+            self.__hydpy__set_value__(__args)
+
+    @overload
+    def __hydpy__get_value__(self: Dim0) -> ValueType:
+        ...
+
+    @overload
+    def __hydpy__get_value__(self: Dim1) -> Vector[ValueType]:
+        ...
+
+    @overload
+    def __hydpy__get_value__(self: Dim2) -> Matrix[ValueType]:
+        ...
+
+    @overload
+    def __hydpy__get_value__(
+        self,
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType]]:
+        ...
+
+    def __hydpy__get_value__(
+        self,
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType]]:
         """The actual parameter or sequence value(s).
 
         First, we prepare a simple (not fully functional) |Variable| subclass:
@@ -1179,7 +1619,38 @@ occurred: could not broadcast input array from shape (2) into shape (2,3)
             )
         return value
 
-    def __hydpy__set_value__(self, value) -> None:
+    @overload
+    def __hydpy__set_value__(
+        self: Dim0,
+        value: ValueType,
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_value__(
+        self: Dim1,
+        value: VectorInput[ValueType],
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_value__(
+        self: Dim2,
+        value: MatrixInput[ValueType],
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_value__(
+        self,
+        value: Union[ValueType, VectorInput[ValueType], MatrixInput[ValueType]],
+    ) -> None:
+        ...
+
+    def __hydpy__set_value__(
+        self,
+        value: Union[ValueType, VectorInput[ValueType], MatrixInput[ValueType]],
+    ) -> None:
         try:
             value = self._prepare_setvalue(value)
             setattr(self.fastaccess, self.name, value)
@@ -1190,54 +1661,80 @@ occurred: could not broadcast input array from shape (2) into shape (2,3)
                 f"{objecttools.devicephrase(self)}"
             )
 
-    def _prepare_getvalue(self, readyflag: bool, value):
+    def _prepare_getvalue(
+        self,
+        readyflag: bool,
+        value: Any,  # ToDo
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType], None]:
         if readyflag:
             if self.NDIM:
-                return numpy.asarray(value)
+                return numpy.asarray(value)  # type: ignore[no-any-return]
             return self.TYPE(value)
         if self.NDIM and not sum(self.shape):
-            return numpy.asarray(value)
+            return numpy.asarray(value)  # type: ignore[no-any-return]
         return None
 
-    def _prepare_setvalue(self, value):
+    def _prepare_setvalue(
+        self,
+        value: Union[ValueType, VectorInput[ValueType], MatrixInput[ValueType]],
+    ) -> Union[ValueType, Vector[ValueType], Matrix[ValueType]]:
         if self.NDIM:
             value = getattr(value, "value", value)
             try:
-                value = numpy.full(self.shape, value, dtype=self.TYPE)
+                return numpy.full(  # type: ignore[no-any-return]
+                    self.shape,
+                    value,
+                    dtype=self.TYPE,
+                )
             except BaseException:
                 objecttools.augment_excmessage(
                     f"While trying to convert the value(s) `{value}` "
                     f"to a numpy ndarray with shape `{self.shape}` "
                     f"and type `{self.TYPE.__name__}`"
                 )
-        else:
-            if isinstance(value, Collection):  # pylint: disable=isinstance-second-argument-not-valid-type
-                # see: https://github.com/PyCQA/pylint/issues/3507
-                if len(value) > 1:
-                    raise ValueError(
-                        f"{len(value)} values are assigned to the scalar "
-                        f"variable {objecttools.devicephrase(self)}."
-                    )
-                value = value[0]
-            try:
-                value = self.TYPE(value)
-            except BaseException:
-                raise TypeError(
-                    f"The given value `{value}` cannot be converted "
-                    f"to type `{self.TYPE.__name__}`."
-                ) from None
-        return value
+        if isinstance(value, Sized):
+            if len(value) > 1:
+                raise ValueError(
+                    f"{len(value)} values are assigned to the scalar "
+                    f"variable {objecttools.devicephrase(self)}."
+                )
+            value = value[0]
+        try:
+            return self.TYPE(cast(ValueType, value))
+        except BaseException:
+            raise TypeError(
+                f"The given value `{value}` cannot be converted "
+                f"to type `{self.TYPE.__name__}`."
+            ) from None
 
-    value = property(fget=__hydpy__get_value__, fset=__hydpy__set_value__)
+    value = _ValueProperty[ValueType](
+        fget=__hydpy__get_value__,
+        fset=__hydpy__set_value__,
+    )
 
-    @property
-    def values(self):
-        """Alias for |Variable.value|."""
-        return self.__hydpy__get_value__()
+    values = _ValueProperty[ValueType](
+        fget=__hydpy__get_value__,
+        fset=__hydpy__set_value__,
+        doc="Alias for |Variable.value|.",
+    )
 
-    @values.setter
-    def values(self, values):
-        self.__hydpy__set_value__(values)
+    @overload
+    def __hydpy__get_shape__(self: Dim0) -> Tuple[()]:
+        ...
+
+    @overload
+    def __hydpy__get_shape__(self: Dim1) -> Tuple[int]:
+        ...
+
+    @overload
+    def __hydpy__get_shape__(self: Dim2) -> Tuple[int, int]:
+        ...
+
+    @overload
+    def __hydpy__get_shape__(
+        self,
+    ) -> Union[Tuple[()], Tuple[int], Tuple[int, int]]:
+        ...
 
     def __hydpy__get_shape__(self) -> Tuple[int, ...]:
         """A tuple containing the actual lengths of all dimensions.
@@ -1385,7 +1882,38 @@ as `var` can only be `()`, but `(2,)` is given.
             )
         return ()
 
-    def __hydpy__set_shape__(self, shape: Union[int, Iterable[int]]):
+    @overload
+    def __hydpy__set_shape__(
+        self: Dim0,
+        shape: Tuple[()],
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_shape__(
+        self: Dim1,
+        shape: Union[int, Tuple[int]],
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_shape__(
+        self: Dim2,
+        shape: Tuple[int, int],
+    ) -> None:
+        ...
+
+    @overload
+    def __hydpy__set_shape__(
+        self,
+        shape: Union[Tuple[()], int, Tuple[int], Tuple[int, int]],
+    ) -> None:
+        ...
+
+    def __hydpy__set_shape__(
+        self,
+        shape: Union[Tuple[()], int, Tuple[int], Tuple[int, int]],
+    ) -> None:
         self.__valueready = False
         self.__shapeready = False
         initvalue, initflag = self.initinfo
@@ -1415,9 +1943,15 @@ as `var` can only be `()`, but `(2,)` is given.
         if initflag:
             self.__valueready = True
 
-    shape = property(fget=__hydpy__get_shape__, fset=__hydpy__set_shape__)
+    shape = _ShapeProperty(
+        fget=__hydpy__get_shape__,
+        fset=__hydpy__set_shape__,
+    )
 
-    def _raise_wrongshape(self, shape):
+    def _raise_wrongshape(
+        self,
+        shape: Union[int, Tuple[int], Tuple[int, int]],
+    ) -> NoReturn:
         raise ValueError(
             f"The shape information of 0-dimensional variables "
             f"as {objecttools.devicephrase(self)} can only be `()`, "
@@ -1489,7 +2023,7 @@ set yet: var([[1.0, nan, 1.0], [1.0, nan, 1.0]]).
             )
 
     @property
-    def refweights(self) -> "Variable":
+    def refweights(self) -> "Variable[Any, Any, Any]":
         """Reference to a |Parameter| object that defines weighting
         coefficients (e.g. fractional areas) for applying function
         |Variable.average_values|.  Must be overwritten by subclasses,
@@ -1499,7 +2033,27 @@ set yet: var([[1.0, nan, 1.0], [1.0, nan, 1.0]]).
             f"not define any weighting coefficients."
         )
 
-    def average_values(self, *args, **kwargs) -> float:
+    @overload
+    def average_values(
+        self,
+        *args: Union[str, "masktools.BaseMask"],  # masks
+        **kwargs: Dict[str, Any],  # mask name 2 argument name 2 argument value
+    ) -> float:
+        ...
+
+    @overload
+    def average_values(
+        self,
+        args: Union[str, "masktools.BaseMask"],  # mask
+        **kwargs: Any,  # argument name 2 argument value
+    ) -> float:
+        ...
+
+    def average_values(
+        self,
+        *args: Union[str, "masktools.BaseMask"],
+        **kwargs: Any,
+    ) -> float:
         """Average the actual values of the |Variable| object.
 
         For 0-dimensional |Variable| objects, the result of method
@@ -1639,7 +2193,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         >>> SoilMoisture.availablemasks = Masks()
 
         Again, one can apply the mask class directly (but note that one
-        has to pass the relevant variable as the first argument.):
+        has to pass the relevant variable as the first argument):
 
         >>> sm.average_values(   # doctest: +ELLIPSIS
         ...     sm.availablemasks.allornothing(sm, complete=True))
@@ -1659,13 +2213,13 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         300.0
         """
         try:
-            if not self.NDIM:
-                return self.value
+            if isinstance(self, Dim0):
+                return cast(ValueType, self.__hydpy__set_value__())
             mask = self.get_submask(*args, **kwargs)
             if numpy.any(mask):
                 weights = self.refweights[mask]
-                return numpy.sum(weights * self[mask]) / numpy.sum(weights)
-            return numpy.nan
+                return cast(float, numpy.sum(weights * self[mask]) / numpy.sum(weights))
+            return cast(float, numpy.nan)
         except BaseException:
             objecttools.augment_excmessage(
                 f"While trying to calculate the mean value of variable "
@@ -1723,7 +2277,9 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
             mask = self.mask
         return mask
 
-    def _prepare_mask(self, mask, masks, **kwargs):
+    def _prepare_mask(
+        self, mask, masks: "masktools.Masks", **kwargs
+    ) -> "masktools.BaseMask":
         mask = masks[mask]
         if inspect.isclass(mask):
             return mask(self, **kwargs)
@@ -1736,7 +2292,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
                 setattr(new, key, copy.deepcopy(value, memo))
         if self.NDIM:
             new.shape = self.shape
-        new.value = self.value
+        new.__hydpy__set_value__(self.value)
         return new
 
     def __getitem__(self, key):
@@ -1757,7 +2313,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
                 self.value[key] = value
             else:
                 self._check_key(key)
-                self.value = value
+                self.__hydpy__set_value__(value)
         except BaseException:
             objecttools.augment_excmessage(
                 f"While trying to set the value(s) of variable "
@@ -1771,7 +2327,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
                 "The only allowed keys for 0-dimensional variables " "are `0` and `:`."
             )
 
-    def __len__(self):
+    def __len__(self) -> int:
         try:
             return numpy.cumprod(self.shape)[-1]
         except IndexError:
@@ -1801,7 +2357,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__radd__", "add")
 
     def __iadd__(self, other):
-        self.value = self._do_math(other, "__add__", "add")
+        self.__hydpy__set_value__(self._do_math(other, "__add__", "add"))
         return self
 
     def __sub__(self, other):
@@ -1811,7 +2367,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rsub__", "subtract")
 
     def __isub__(self, other):
-        self.value = self._do_math(other, "__sub__", "subtract")
+        self.__hydpy__set_value__(self._do_math(other, "__sub__", "subtract"))
         return self
 
     def __mul__(self, other):
@@ -1821,7 +2377,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rmul__", "multiply")
 
     def __imul__(self, other):
-        self.value = self._do_math(other, "__mul__", "multiply")
+        self.__hydpy__set_value__(self._do_math(other, "__mul__", "multiply"))
         return self
 
     def __truediv__(self, other):
@@ -1831,7 +2387,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rtruediv__", "divide")
 
     def __itruediv__(self, other):
-        self.value = self._do_math(other, "__truediv__", "divide")
+        self.__hydpy__set_value__(self._do_math(other, "__truediv__", "divide"))
         return self
 
     def __floordiv__(self, other):
@@ -1841,7 +2397,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rfloordiv__", "floor divide")
 
     def __ifloordiv__(self, other):
-        self.value = self._do_math(other, "__floordiv__", "floor divide")
+        self.__hydpy__set_value__(self._do_math(other, "__floordiv__", "floor divide"))
         return self
 
     def __mod__(self, other):
@@ -1851,7 +2407,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rmod__", "mod divide")
 
     def __imod__(self, other):
-        self.value = self._do_math(other, "__mod__", "mod divide")
+        self.__hydpy__set_value__(self._do_math(other, "__mod__", "mod divide"))
         return self
 
     def __divmod__(self, other):
@@ -1867,7 +2423,7 @@ has been determined, which is not a submask of `Soil([ True,  True, False])`.
         return self._do_math(other, "__rpow__", "exponentiate (reflectively)")
 
     def __ipow__(self, other):
-        self.value = self._do_math(other, "__pow__", "exponentiate")
+        self.__hydpy__set_value__(self._do_math(other, "__pow__", "exponentiate"))
         return self
 
     def __pos__(self):
@@ -2290,7 +2846,7 @@ named `wrong`.
 
 
 def to_repr(
-    self: Variable,
+    self: Variable[Any, Any, Any],
     values,
     brackets1d: Optional[bool] = False,
 ) -> str:
