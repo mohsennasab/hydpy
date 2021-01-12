@@ -1948,7 +1948,7 @@ requested to make any internal data available.
         """
         return f"{self.descr_device}_{self.descr_sequence}"
 
-    @propertytools.DefaultProperty
+    @propertytools.DefaultPropertyStr
     def filename_ext(self) -> str:
         # noinspection PyTypeChecker
         """The full filename of the external data file.
@@ -1985,7 +1985,7 @@ requested to make any internal data available.
         """
         return self.rawfilename + ".bin"
 
-    @propertytools.DefaultProperty
+    @propertytools.DefaultPropertyStr
     def dirpath_int(self) -> str:
         # noinspection PyTypeChecker
         """The absolute path of the directory of the internal data file.
@@ -2052,7 +2052,7 @@ or prepare `pub.sequencemanager` correctly.
                 f"`pub.sequencemanager` correctly."
             ) from None
 
-    @propertytools.DefaultProperty
+    @propertytools.DefaultPropertyStr
     def filepath_ext(self) -> str:
         # noinspection PyTypeChecker
         """The absolute path to the external data file.
@@ -2071,7 +2071,7 @@ or prepare `pub.sequencemanager` correctly.
         """
         return os.path.join(self.dirpath_ext, self.filename_ext)
 
-    @propertytools.DefaultProperty
+    @propertytools.DefaultPropertyStr
     def filepath_int(self) -> str:
         # noinspection PyTypeChecker
         """The absolute path to the internal data file.
