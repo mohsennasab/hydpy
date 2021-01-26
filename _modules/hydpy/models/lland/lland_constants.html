@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>hydpy.models.lland.lland_constants &#8212; HydPy 4.0a17 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css" />
+    
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/x-mathjax-config">MathJax.Hub.Config({"displayAlign": "left"})</script>
+    
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">HydPy 4.0a17 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="../lland.html" accesskey="U">hydpy.models.lland</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">hydpy.models.lland.lland_constants</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for hydpy.models.lland.lland_constants</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;The HydPy-L-Land model (|lland|) allows for the subdivision of subbasins</span>
+<span class="sd">into hydrological response units (hru).  Some processes, e.g. interception,</span>
+<span class="sd">are calculated separately for each zone.  This is why some parameters (e.g.</span>
+<span class="sd">the usable field capacity |NFk|) and some sequences (e.g. the actual soil</span>
+<span class="sd">water storage |BoWa|) are 1-dimensional.  Each entry represents the value</span>
+<span class="sd">of a different hru.</span>
+
+<span class="sd">In contrasts to the original LARSIM model, the HydPy-L-Land model allows for</span>
+<span class="sd">arbitrary definitions of units.  Nevertheless, the original distinction</span>
+<span class="sd">in accordance with sixteen different landuse types is still supported.  The</span>
+<span class="sd">parameter |Lnk| defines which entry of e.g. parameter |NFk| is related to</span>
+<span class="sd">which land use type via integer values.  Note that for the units of the most</span>
+<span class="sd">land use types, the same equations are applied. Only units of type |VERS|,</span>
+<span class="sd">|WASSER|, |FLUSS|, and |SEE| are partly connected to different process</span>
+<span class="sd">equations.</span>
+
+<span class="sd">For comprehensibility, this module introduces the relevant integer constants.</span>
+<span class="sd">Through performing a wildcard import</span>
+
+<span class="sd">&gt;&gt;&gt; from hydpy.models.lland import *</span>
+
+<span class="sd">these are available in your local namespace:</span>
+
+<span class="sd">&gt;&gt;&gt; (SIED_D, SIED_L, VERS, ACKER, WEINB, OBSTB, BODEN, GLETS, GRUE_I,</span>
+<span class="sd">...  FEUCHT, GRUE_E, BAUMB, NADELW, LAUBW, MISCHW, WASSER, FLUSS, SEE)</span>
+<span class="sd">(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">hydpy.core</span> <span class="kn">import</span> <span class="n">parametertools</span>
+
+<span class="n">SIED_D</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Siedlung, dicht` (settlement, dense).&quot;&quot;&quot;</span>
+<span class="n">SIED_L</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Siedlung, locker` (settlement, light).&quot;&quot;&quot;</span>
+<span class="n">VERS</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `versiegelt` (sealed).&quot;&quot;&quot;</span>
+<span class="n">ACKER</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Acker` (fields).&quot;&quot;&quot;</span>
+<span class="n">WEINB</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Weinbau` (viniculture).&quot;&quot;&quot;</span>
+<span class="n">OBSTB</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Obstbau` (intensive orchards).&quot;&quot;&quot;</span>
+<span class="n">BODEN</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `unbewachsener Boden` (unsealed soil, not overgrown).&quot;&quot;&quot;</span>
+<span class="n">GLETS</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Gletscher` (`glacier`).&quot;&quot;&quot;</span>
+<span class="n">GRUE_I</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Grünland, intensiv` (intensive pasture).&quot;&quot;&quot;</span>
+<span class="n">FEUCHT</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Feuchtflächen` (wetlands).&quot;&quot;&quot;</span>
+<span class="n">GRUE_E</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">11</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Grünland, extensiv` (extensive pasture).&quot;&quot;&quot;</span>
+<span class="n">BAUMB</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `lockerer Baumbestand` (sparsely populated forest).&quot;&quot;&quot;</span>
+<span class="n">NADELW</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">13</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Nadelwald` (coniferous forest).&quot;&quot;&quot;</span>
+<span class="n">LAUBW</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">14</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Laubwald` (deciduous forest).&quot;&quot;&quot;</span>
+<span class="n">MISCHW</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Mischwald` (mixed forest).&quot;&quot;&quot;</span>
+<span class="n">WASSER</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Wasser` (water areas).&quot;&quot;&quot;</span>
+<span class="n">FLUSS</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">17</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `Fluss` (river surface).&quot;&quot;&quot;</span>
+<span class="n">SEE</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">IntConstant</span><span class="p">(</span><span class="mi">18</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Constant for `See` (lake surface).&quot;&quot;&quot;</span>
+
+<span class="n">CONSTANTS</span> <span class="o">=</span> <span class="n">parametertools</span><span class="o">.</span><span class="n">Constants</span><span class="p">()</span>
+<span class="sd">&quot;&quot;&quot;Dictionary containing all constants defined by HydPy-L-Land.&quot;&quot;&quot;</span>
+
+<span class="c1"># Make only the constants available on wildcard-imports.</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">CONSTANTS</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../../../../index.html">
+              <img class="logo" src="../../../../_static/HydPy_Logo.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="../../../../index.html">Table of Contents</a></h3>
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../install.html">Installation Instructions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../how_to.html">How to…</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../framework.html">Framework Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../modelcollection.html">Model Collection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../examples.html">Example Projects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../zbibliography.html">Bibliography</a></li>
+</ul>
+
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../../index.html">HydPy 4.0a17 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../../index.html" >Module code</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="../lland.html" >hydpy.models.lland</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">hydpy.models.lland.lland_constants</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, HydPy Developers.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.4.3.
+    </div>
+  </body>
+</html>
